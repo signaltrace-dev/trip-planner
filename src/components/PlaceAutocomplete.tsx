@@ -72,7 +72,9 @@ export function PlaceAutocomplete({
     const countryRestriction = getCountryRestrictions();
     const placeTypes = getPlaceTypes();
 
-    const options: google.maps.places.PlaceAutocompleteElementOptions = {
+    const options: google.maps.places.PlaceAutocompleteElementOptions & {
+      includedPrimaryTypes?: string[];
+    } = {
       componentRestrictions: { country: countryRestriction },
     };
 

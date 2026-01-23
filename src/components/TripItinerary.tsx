@@ -98,6 +98,7 @@ export function TripItinerary() {
       ...place,
       timeAtDestination: 1,
       notes: '',
+      manualDepartureTime: null,
     });
   };
 
