@@ -24,3 +24,45 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Google Places Autocomplete Element Styling */
+.place-autocomplete-container {
+  width: 100%;
+  /* Force light color scheme for Google's component */
+  color-scheme: light;
+}
+
+.place-autocomplete-container gmp-place-autocomplete {
+  width: 100%;
+  /* CSS custom properties that Google Maps components may use */
+  --gmp-color-surface: #ffffff;
+  --gmp-color-on-surface: #111827;
+  --gmp-color-on-surface-variant: #4b5563;
+  --gmpac-color-surface: #ffffff;
+  --gmpac-color-on-surface: #111827;
+}
+
+/* Style the input inside the web component */
+gmp-place-autocomplete::part(input) {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+gmp-place-autocomplete::part(input):focus {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+gmp-place-autocomplete::part(input)::placeholder {
+  color: #4b5563 !important;
+  -webkit-text-fill-color: #4b5563 !important;
+  opacity: 1 !important;
+}
