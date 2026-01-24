@@ -72,6 +72,17 @@ NEXT_PUBLIC_GOOGLE_PLACES_COUNTRY=us
 NEXT_PUBLIC_GOOGLE_PLACES_TYPES=locality,establishment
 ```
 
+### Optional Basic Authentication
+
+To protect the app with HTTP Basic Auth, set both of these env vars:
+
+```
+BASIC_AUTH_USER=username
+BASIC_AUTH_PASSWORD=password
+```
+
+When both are set, the browser will prompt for credentials before allowing access. When either is missing or empty, auth is disabled (useful for local development).
+
 ## Claude Code Skills
 
 Use these skills when applicable for the following types of requests:
