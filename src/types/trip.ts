@@ -9,6 +9,7 @@ export interface TripStop {
   lng: number;
   timeAtDestination: number;
   driveTimeFromPrevious: number | null;
+  travelType: 'drive' | 'fly';
   notes: string;
   manualDepartureTime: Date | null;
 }

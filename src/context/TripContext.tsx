@@ -16,6 +16,7 @@ interface CompactStop {
   lg: number; // lng
   t: number;  // timeAtDestination
   d: number | null; // driveTimeFromPrevious
+  tt?: string; // travelType ('fly' only; omitted = 'drive')
   nt: string; // notes
 }
 
@@ -39,6 +40,7 @@ function compressTrip(tripName: string, startDateTime: Date, stops: TripStop[]):
       lg: Math.round(stop.lng * 100000) / 100000,
       t: stop.timeAtDestination,
       d: stop.driveTimeFromPrevious,
+      ...(stop.travelType === 'fly' ? { tt: 'fly' } : {}),
       nt: stop.notes,
     })),
   };
@@ -63,6 +65,7 @@ function decompressTrip(encoded: string): { tripName: string; startDateTime: Dat
         lng: s.lg,
         timeAtDestination: s.t,
         driveTimeFromPrevious: s.d,
+        travelType: s.tt === 'fly' ? 'fly' : 'drive',
         notes: s.nt,
         manualDepartureTime: null,
       })),
@@ -80,7 +83,7 @@ interface TripContextType {
   tripName: string;
   setTripName: (name: string) => void;
   setStartDateTime: (date: Date) => void;
-  addStop: (stop: Omit<TripStop, 'id' | 'driveTimeFromPrevious'>) => void;
+  addStop: (stop: Omit<TripStop, 'id' | 'driveTimeFromPrevious' | 'travelType'>) => void;
   updateStop: (id: string, updates: Partial<TripStop>) => void;
   removeStop: (id: string) => void;
   reorderStops: (fromIndex: number, toIndex: number) => void;
@@ -124,11 +127,12 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   const calculatedStops = calculateItinerary(stops, startDateTime);
 
-  const addStop = useCallback((stopData: Omit<TripStop, 'id' | 'driveTimeFromPrevious' | 'manualDepartureTime'>) => {
+  const addStop = useCallback((stopData: Omit<TripStop, 'id' | 'driveTimeFromPrevious' | 'travelType' | 'manualDepartureTime'>) => {
     const newStop: TripStop = {
       ...stopData,
       id: uuidv4(),
       driveTimeFromPrevious: null, // Will be calculated
+      travelType: 'drive',
       manualDepartureTime: null,
     };
     setStops(prev => [...prev, newStop]);
@@ -149,10 +153,10 @@ export function TripProvider({ children }: { children: ReactNode }) {
       const newStops = [...prev];
       const [removed] = newStops.splice(fromIndex, 1);
       newStops.splice(toIndex, 0, removed);
-      // Clear drive times since order changed
+      // Clear drive times since order changed, but keep manual times for fly stops
       return newStops.map((stop, index) => ({
         ...stop,
-        driveTimeFromPrevious: index === 0 ? null : null,
+        driveTimeFromPrevious: index === 0 ? null : (stop.travelType === 'fly' ? stop.driveTimeFromPrevious : null),
       }));
     });
   }, []);
@@ -202,6 +206,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
     if (data.stops && Array.isArray(data.stops)) {
       setStops(data.stops.map((stop: TripStop & { manualDepartureTime?: string | null }) => ({
         ...stop,
+        travelType: stop.travelType === 'fly' ? 'fly' : 'drive',
         manualDepartureTime: stop.manualDepartureTime ? new Date(stop.manualDepartureTime) : null,
       })));
     }

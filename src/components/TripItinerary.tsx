@@ -54,6 +54,7 @@ export function TripItinerary() {
     const currentStop = stops[stopIndex];
 
     if (!previousStop || !currentStop) return;
+    if (currentStop.travelType === 'fly') return;
 
     setCalculatingDistance(stopId);
 
@@ -76,7 +77,7 @@ export function TripItinerary() {
     const recalculateDriveTimes = async () => {
       for (let i = 1; i < stops.length; i++) {
         const stop = stops[i];
-        if (stop.driveTimeFromPrevious === null) {
+        if (stop.driveTimeFromPrevious === null && stop.travelType !== 'fly') {
           await calculateDriveTimeForStop(stop.id, i);
         }
       }
@@ -239,8 +240,8 @@ export function TripItinerary() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Location
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">
-                    Drive Time
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">
+                    Travel Time
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">
                     Time There
@@ -298,14 +299,43 @@ export function TripItinerary() {
                     <td className="px-4 py-3">
                       {index === 0 ? (
                         <span className="text-gray-400">-</span>
-                      ) : calculatingDistance === stop.id ? (
-                        <span className="text-gray-400 italic text-sm">calculating...</span>
                       ) : (
-                        <span className="text-sm text-gray-700 px-2 py-1">
-                          {stop.driveTimeFromPrevious !== null
-                            ? formatDuration(stop.driveTimeFromPrevious)
-                            : '-'}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              const newType = stop.travelType === 'fly' ? 'drive' : 'fly';
+                              updateStop(stop.id, {
+                                travelType: newType,
+                                driveTimeFromPrevious: null,
+                              });
+                            }}
+                            className={`flex-shrink-0 p-1 rounded transition-colors ${
+                              stop.travelType === 'fly'
+                                ? 'text-blue-600 hover:bg-blue-50'
+                                : 'text-gray-400 hover:bg-gray-100'
+                            }`}
+                            title={stop.travelType === 'fly' ? 'Flight (click to switch to drive)' : 'Driving (click to switch to flight)'}
+                          >
+                            {stop.travelType === 'fly' ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 00-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                              </svg>
+                            )}
+                          </button>
+                          {calculatingDistance === stop.id ? (
+                            <span className="text-gray-400 italic text-sm">calculating...</span>
+                          ) : (
+                            <span className="text-sm text-gray-700 px-1 py-1">
+                              {stop.driveTimeFromPrevious !== null
+                                ? formatDuration(stop.driveTimeFromPrevious)
+                                : '-'}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -470,7 +500,7 @@ export function TripItinerary() {
                   <span className="font-semibold text-gray-900">{calculatedStops.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Total Drive Time:</span>{' '}
+                  <span className="text-gray-500">Total Travel Time:</span>{' '}
                   <span className="font-semibold text-gray-900">
                     {formatDuration(
                       calculatedStops.reduce(
