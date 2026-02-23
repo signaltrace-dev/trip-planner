@@ -4,6 +4,63 @@ import { CalculatedStop } from '@/types/trip';
 import { formatDuration } from './timeCalculations';
 import { format } from 'date-fns';
 
+// -- PDF icon drawing helpers --
+
+function drawHomeIcon(doc: jsPDF, x: number, y: number, size: number) {
+  doc.setFillColor(34, 197, 94);
+  // Roof
+  doc.triangle(
+    x, y + size * 0.45,
+    x + size / 2, y,
+    x + size, y + size * 0.45,
+    'F'
+  );
+  // Body
+  doc.rect(x + size * 0.15, y + size * 0.45, size * 0.7, size * 0.55, 'F');
+  // Door cutout
+  doc.setFillColor(255, 255, 255);
+  doc.rect(x + size * 0.35, y + size * 0.6, size * 0.3, size * 0.4, 'F');
+}
+
+function drawCarIcon(doc: jsPDF, x: number, y: number, size: number) {
+  doc.setFillColor(107, 114, 128);
+  // Lower body
+  doc.rect(x, y + size * 0.35, size, size * 0.35, 'F');
+  // Cabin
+  doc.rect(x + size * 0.2, y + size * 0.05, size * 0.55, size * 0.35, 'F');
+  // Wheels
+  doc.setFillColor(55, 55, 55);
+  doc.circle(x + size * 0.22, y + size * 0.78, size * 0.13, 'F');
+  doc.circle(x + size * 0.78, y + size * 0.78, size * 0.13, 'F');
+}
+
+function drawPlaneIcon(doc: jsPDF, x: number, y: number, size: number) {
+  doc.setFillColor(124, 58, 237);
+  // Fuselage
+  doc.rect(x + size * 0.05, y + size * 0.35, size * 0.85, size * 0.25, 'F');
+  // Nose
+  doc.triangle(
+    x + size * 0.9, y + size * 0.35,
+    x + size, y + size * 0.475,
+    x + size * 0.9, y + size * 0.6,
+    'F'
+  );
+  // Wing
+  doc.triangle(
+    x + size * 0.3, y + size * 0.38,
+    x + size * 0.5, y,
+    x + size * 0.65, y + size * 0.38,
+    'F'
+  );
+  // Tail fin
+  doc.triangle(
+    x + size * 0.08, y + size * 0.35,
+    x, y + size * 0.08,
+    x + size * 0.2, y + size * 0.35,
+    'F'
+  );
+}
+
 function getApiKey(): string | null {
   if (typeof window === 'undefined') return null;
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || localStorage.getItem('googleMapsApiKey');
@@ -111,11 +168,10 @@ export async function exportTripPdf(
     let travel = '-';
     if (i > 0 && stop.driveTimeFromPrevious !== null) {
       travel = formatDuration(stop.driveTimeFromPrevious);
-      if (stop.travelType === 'fly') travel += ' (fly)';
     }
 
     return [
-      String(i + 1),
+      i === 0 ? '' : String(i + 1),
       location,
       travel,
       i === 0 ? '-' : formatDuration(stop.timeAtDestination),
@@ -145,6 +201,40 @@ export async function exportTripPdf(
       4: { cellWidth: 32 },
       5: { cellWidth: 32 },
       6: { cellWidth: 'auto' },
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    didDrawCell: (data: any) => {
+      if (data.section !== 'body') return;
+
+      const cellY = data.cell.y as number;
+      const cellH = data.cell.height as number;
+      const centerY = cellY + cellH / 2;
+
+      // Home icon centered in # column for first stop
+      if (data.column.index === 0 && data.row.index === 0) {
+        const s = 3;
+        const cx = (data.cell.x as number) + (data.cell.width as number) / 2;
+        drawHomeIcon(doc, cx - s / 2, centerY - s / 2, s);
+      }
+
+      // Car/plane icon to the left of travel time text
+      if (data.column.index === 2 && data.row.index > 0) {
+        const stop = calculatedStops[data.row.index];
+        if (!stop || stop.driveTimeFromPrevious === null) return;
+
+        const s = 2.8;
+        const cellText = (data.cell.text as string[]).join('');
+        doc.setFontSize(data.cell.styles.fontSize);
+        const textWidth = doc.getTextWidth(cellText);
+        const cellCenterX = (data.cell.x as number) + (data.cell.width as number) / 2;
+        const iconX = cellCenterX - textWidth / 2 - s - 0.8;
+
+        if (stop.travelType === 'fly') {
+          drawPlaneIcon(doc, iconX, centerY - s / 2, s);
+        } else {
+          drawCarIcon(doc, iconX, centerY - s / 2, s);
+        }
+      }
     },
   });
 
