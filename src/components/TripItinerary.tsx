@@ -7,6 +7,7 @@ import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { MapDisplay } from './MapDisplay';
 import { calculateDrivingDistance } from '@/lib/distanceService';
 import { formatDuration, parseDuration } from '@/lib/timeCalculations';
+import { exportTripPdf } from '@/lib/pdfExport';
 
 export function TripItinerary() {
   const {
@@ -34,6 +35,18 @@ export function TripItinerary() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [calculatingDistance, setCalculatingDistance] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      await exportTripPdf(tripName, startDateTime, calculatedStops);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const handleShare = async () => {
     const link = generateShareLink();
@@ -201,6 +214,16 @@ export function TripItinerary() {
               <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
             </svg>
             {shareStatus === 'copied' ? 'Link Copied!' : 'Share'}
+          </button>
+          <button
+            onClick={handleExportPdf}
+            disabled={calculatedStops.length === 0 || isExportingPdf}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4 2a1 1 0 10-2 0v3a1 1 0 102 0v-3z" clipRule="evenodd" />
+            </svg>
+            {isExportingPdf ? 'Exporting...' : 'Export PDF'}
           </button>
           <button
             onClick={clearAllStops}
