@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
 import { useTrip } from '@/context/TripContext';
+import { CalculatedStop } from '@/types/trip';
 import { formatDuration } from '@/lib/timeCalculations';
 import { format } from 'date-fns';
 
@@ -18,12 +19,60 @@ const defaultCenter = {
 
 const defaultZoom = 4;
 
-const polylineOptions = {
+const drivePolylineOptions = {
   strokeColor: '#3B82F6',
   strokeOpacity: 0.8,
   strokeWeight: 4,
   geodesic: true,
 };
+
+const flightPolylineOptions = {
+  strokeOpacity: 0,
+  geodesic: true,
+  icons: [
+    {
+      icon: {
+        path: 'M 0,-1 0,1',
+        strokeOpacity: 0.8,
+        strokeColor: '#7C3AED',
+        scale: 3,
+      },
+      offset: '0',
+      repeat: '15px',
+    },
+  ],
+};
+
+interface RouteLine {
+  path: Array<{ lat: number; lng: number }>;
+  type: 'drive' | 'fly';
+}
+
+// Group consecutive legs into drive segments and individual fly legs
+function buildSegments(
+  stops: CalculatedStop[]
+): Array<{ type: 'drive' | 'fly'; stopIndices: number[] }> {
+  if (stops.length < 2) return [];
+
+  const segments: Array<{ type: 'drive' | 'fly'; stopIndices: number[] }> = [];
+
+  for (let i = 1; i < stops.length; i++) {
+    const legType = stops[i].travelType === 'fly' ? 'fly' : 'drive';
+
+    if (legType === 'fly') {
+      segments.push({ type: 'fly', stopIndices: [i - 1, i] });
+    } else {
+      const last = segments[segments.length - 1];
+      if (last && last.type === 'drive') {
+        last.stopIndices.push(i);
+      } else {
+        segments.push({ type: 'drive', stopIndices: [i - 1, i] });
+      }
+    }
+  }
+
+  return segments;
+}
 
 // Decode Google's encoded polyline format
 function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
@@ -78,21 +127,23 @@ export function MapDisplay() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [routePath, setRoutePath] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [routeLines, setRouteLines] = useState<RouteLine[]>([]);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
-  // Fetch driving directions using Routes API
+  // Fetch driving directions (per segment) and build flight straight lines
   useEffect(() => {
     if (!isExpanded || calculatedStops.length < 2) {
-      setRoutePath([]);
+      setRouteLines([]);
       return;
     }
 
-    const fetchRoute = async () => {
+    const segments = buildSegments(calculatedStops);
+
+    const fetchRoutes = async () => {
       const apiKey = getApiKey();
       if (!apiKey) {
         console.error('No API key available for Routes API');
@@ -100,75 +151,87 @@ export function MapDisplay() {
       }
 
       setIsLoadingRoute(true);
+      const lines: RouteLine[] = [];
 
-      const origin = {
-        location: {
-          latLng: {
-            latitude: calculatedStops[0].lat,
-            longitude: calculatedStops[0].lng,
+      for (const segment of segments) {
+        if (segment.type === 'fly') {
+          const from = calculatedStops[segment.stopIndices[0]];
+          const to = calculatedStops[segment.stopIndices[1]];
+          lines.push({
+            type: 'fly',
+            path: [
+              { lat: from.lat, lng: from.lng },
+              { lat: to.lat, lng: to.lng },
+            ],
+          });
+          continue;
+        }
+
+        // Drive segment -- fetch route from Routes API
+        const indices = segment.stopIndices;
+        const originStop = calculatedStops[indices[0]];
+        const destStop = calculatedStops[indices[indices.length - 1]];
+
+        const origin = {
+          location: {
+            latLng: { latitude: originStop.lat, longitude: originStop.lng },
           },
-        },
-      };
+        };
 
-      const destination = {
-        location: {
-          latLng: {
-            latitude: calculatedStops[calculatedStops.length - 1].lat,
-            longitude: calculatedStops[calculatedStops.length - 1].lng,
+        const destination = {
+          location: {
+            latLng: { latitude: destStop.lat, longitude: destStop.lng },
           },
-        },
-      };
+        };
 
-      const intermediates = calculatedStops.slice(1, -1).map((stop) => ({
-        location: {
-          latLng: {
-            latitude: stop.lat,
-            longitude: stop.lng,
-          },
-        },
-      }));
-
-      try {
-        const response = await fetch(
-          `https://routes.googleapis.com/directions/v2:computeRoutes`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': apiKey,
-              'X-Goog-FieldMask': 'routes.polyline.encodedPolyline',
+        const intermediates = indices.slice(1, -1).map((i) => ({
+          location: {
+            latLng: {
+              latitude: calculatedStops[i].lat,
+              longitude: calculatedStops[i].lng,
             },
-            body: JSON.stringify({
-              origin,
-              destination,
-              intermediates: intermediates.length > 0 ? intermediates : undefined,
-              travelMode: 'DRIVE',
-            }),
+          },
+        }));
+
+        try {
+          const response = await fetch(
+            `https://routes.googleapis.com/directions/v2:computeRoutes`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': apiKey,
+                'X-Goog-FieldMask': 'routes.polyline.encodedPolyline',
+              },
+              body: JSON.stringify({
+                origin,
+                destination,
+                intermediates: intermediates.length > 0 ? intermediates : undefined,
+                travelMode: 'DRIVE',
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Routes API error: ${response.status}`);
           }
-        );
 
-        if (!response.ok) {
-          throw new Error(`Routes API error: ${response.status}`);
+          const data = await response.json();
+
+          if (data.routes && data.routes[0]?.polyline?.encodedPolyline) {
+            const decoded = decodePolyline(data.routes[0].polyline.encodedPolyline);
+            lines.push({ type: 'drive', path: decoded });
+          }
+        } catch (error) {
+          console.error('Error fetching route for drive segment:', error);
         }
-
-        const data = await response.json();
-
-        if (data.routes && data.routes[0]?.polyline?.encodedPolyline) {
-          const decoded = decodePolyline(data.routes[0].polyline.encodedPolyline);
-          setRoutePath(decoded);
-        } else {
-          console.error('No route found in response', data);
-          setRoutePath([]);
-        }
-      } catch (error) {
-        console.error('Error fetching route:', error);
-        setRoutePath([]);
-      } finally {
-        setIsLoadingRoute(false);
       }
+
+      setRouteLines(lines);
+      setIsLoadingRoute(false);
     };
 
-    fetchRoute();
+    fetchRoutes();
   }, [isExpanded, calculatedStops]);
 
   // Fit bounds when stops change
@@ -183,8 +246,10 @@ export function MapDisplay() {
     });
 
     // Also include route path points for better fit
-    routePath.forEach((point) => {
-      bounds.extend(point);
+    routeLines.forEach((line) => {
+      line.path.forEach((point) => {
+        bounds.extend(point);
+      });
     });
 
     mapRef.current.fitBounds(bounds);
@@ -192,7 +257,7 @@ export function MapDisplay() {
     if (calculatedStops.length === 1) {
       mapRef.current.setZoom(12);
     }
-  }, [calculatedStops, isExpanded, routePath]);
+  }, [calculatedStops, isExpanded, routeLines]);
 
   const selectedStop = calculatedStops.find((stop) => stop.id === selectedStopId);
 
@@ -240,10 +305,14 @@ export function MapDisplay() {
             fullscreenControl: true,
           }}
         >
-          {/* Show route polyline if available */}
-          {routePath.length > 0 && (
-            <Polyline path={routePath} options={polylineOptions} />
-          )}
+          {/* Show route polylines -- solid for drive, dashed for flight */}
+          {routeLines.map((line, index) => (
+            <Polyline
+              key={`${line.type}-${index}`}
+              path={line.path}
+              options={line.type === 'fly' ? flightPolylineOptions : drivePolylineOptions}
+            />
+          ))}
 
           {/* Custom markers with stop numbers */}
           {calculatedStops.map((stop, index) => (
