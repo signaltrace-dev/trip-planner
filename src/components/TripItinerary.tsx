@@ -29,6 +29,7 @@ export function TripItinerary() {
 
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState<string | null>(null);
+  const [editingDriveTime, setEditingDriveTime] = useState<string | null>(null);
   const [editingDeparture, setEditingDeparture] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [calculatingDistance, setCalculatingDistance] = useState<string | null>(null);
@@ -328,12 +329,42 @@ export function TripItinerary() {
                           </button>
                           {calculatingDistance === stop.id ? (
                             <span className="text-gray-400 italic text-sm">calculating...</span>
+                          ) : editingDriveTime === stop.id ? (
+                            <input
+                              type="text"
+                              defaultValue={stop.driveTimeFromPrevious?.toString() ?? ''}
+                              placeholder="e.g. 2h 30m"
+                              onFocus={(e) => e.target.select()}
+                              onBlur={(e) => {
+                                const hours = parseDuration(e.target.value);
+                                if (hours !== null) {
+                                  updateDriveTime(stop.id, hours);
+                                }
+                                setEditingDriveTime(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const hours = parseDuration(e.currentTarget.value);
+                                  if (hours !== null) {
+                                    updateDriveTime(stop.id, hours);
+                                  }
+                                  setEditingDriveTime(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingDriveTime(null);
+                                }
+                              }}
+                              autoFocus
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                            />
                           ) : (
-                            <span className="text-sm text-gray-700 px-1 py-1">
+                            <button
+                              onClick={() => setEditingDriveTime(stop.id)}
+                              className="text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-1 py-1 rounded transition-colors"
+                            >
                               {stop.driveTimeFromPrevious !== null
                                 ? formatDuration(stop.driveTimeFromPrevious)
                                 : '-'}
-                            </span>
+                            </button>
                           )}
                         </div>
                       )}
